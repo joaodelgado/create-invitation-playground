@@ -1,22 +1,25 @@
 package main
 
 type ABTest interface {
-	accept(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, ExperimentData, bool)
+	accept(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, ExperimentData, bool, error)
 }
 
 type ABTestChain struct {
 	abTests []ABTest
 }
 
-func (tc ABTestChain) choose(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData) {
+func (tc ABTestChain) choose(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
 	for _, abTest := range tc.abTests {
-		updatedTemplate, experiment, accepted := abTest.accept(featureToggle, dto, template)
+		updatedTemplate, experiment, accepted, err := abTest.accept(featureToggle, dto, template)
+		if err != nil {
+			return TemplateData{}, nil, err
+		}
 		if accepted {
-			return updatedTemplate, &experiment
+			return updatedTemplate, &experiment, nil
 		}
 	}
 
-	return template, nil
+	return template, nil, nil
 }
 
 ///
@@ -25,9 +28,9 @@ func (tc ABTestChain) choose(featureToggle FeatureToggle, dto HydratorDTO, templ
 
 type SignupWHPlusSubject struct{}
 
-func (SignupWHPlusSubject) accept(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, ExperimentData, bool) {
+func (SignupWHPlusSubject) accept(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, ExperimentData, bool, error) {
 	if template.template != "signup_wh_plus" {
-		return template, ExperimentData{}, false
+		return template, ExperimentData{}, false, nil
 	}
 
 	if featureToggle.IsEnabled("SignupSubject", dto.eligibleID) {
@@ -38,21 +41,29 @@ func (SignupWHPlusSubject) accept(featureToggle FeatureToggle, dto HydratorDTO, 
 				experimentEnabled: true,
 				name:              "SignupSubject",
 				scenario:          "B",
-			}, true
+			}, true, nil
 	} else {
 		return template, ExperimentData{
 			experimentEnabled: true,
 			name:              "SignupSubject",
 			scenario:          "Control",
-		}, true
+		}, true, nil
 	}
 }
 
-type InternationalCheckIn struct{}
+type SubscribeInternationalCheckIn struct{}
 
-func (InternationalCheckIn) accept(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, ExperimentData, bool) {
-	if !dto.isMember || !dto.clientOrder.hasInternationCheckin {
-		return template, ExperimentData{}, false
+func (SubscribeInternationalCheckIn) accept(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, ExperimentData, bool, error) {
+	if !dto.isMember {
+		return template, ExperimentData{}, false, nil
+	}
+
+	clientOrder, err := dto.GetClientOrder()
+	if err != nil {
+		return template, ExperimentData{}, false, err
+	}
+	if !clientOrder.hasInternationCheckin {
+		return template, ExperimentData{}, false, nil
 	}
 
 	if featureToggle.IsEnabled("InternationalCheckIn", dto.eligibleID) {
@@ -63,12 +74,12 @@ func (InternationalCheckIn) accept(featureToggle FeatureToggle, dto HydratorDTO,
 				experimentEnabled: true,
 				name:              "InternationalCheckIn",
 				scenario:          "B",
-			}, true
+			}, true, nil
 	} else {
 		return template, ExperimentData{
 			experimentEnabled: true,
 			name:              "InternationalCheckIn",
 			scenario:          "Control",
-		}, true
+		}, true, nil
 	}
 }

@@ -3,7 +3,7 @@ package main
 import "errors"
 
 type Template interface {
-	accept(dto HydratorDTO) *TemplateData
+	accept(dto HydratorDTO) (*TemplateData, error)
 }
 
 type TemplateChain struct {
@@ -12,7 +12,11 @@ type TemplateChain struct {
 
 func (tc TemplateChain) choose(dto HydratorDTO) (TemplateData, error) {
 	for _, template := range tc.templates {
-		templateData := template.accept(dto)
+		templateData, error := template.accept(dto)
+		if error != nil {
+			return TemplateData{}, error
+		}
+
 		if templateData != nil {
 			return *templateData, nil
 		}
@@ -27,41 +31,59 @@ func (tc TemplateChain) choose(dto HydratorDTO) (TemplateData, error) {
 
 type SignupWHPlusTemplate struct{}
 
-func (SignupWHPlusTemplate) accept(dto HydratorDTO) *TemplateData {
-	if dto.clientOrder.hasWHPlus && dto.bestPlan.discountedPrice == 0 {
+func (SignupWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
+	clientOrder, err := dto.GetClientOrder()
+	if err != nil {
+		return nil, err
+	}
+	if !clientOrder.hasWHPlus {
+		return nil, nil
+	}
+
+	bestPlan, err := dto.GetBestPlan()
+	if err != nil {
+		return nil, err
+	}
+
+	if bestPlan.discountedPrice == 0 {
 		template := TemplateData{
 			template: "signup_wh_plus",
 			subject:  "default",
 		}
-		return &template
+		return &template, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 type SignupDigitalTemplate struct{}
 
-func (SignupDigitalTemplate) accept(dto HydratorDTO) *TemplateData {
-	if dto.clientOrder.hasDigitalPlan {
+func (SignupDigitalTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
+	clientOrder, err := dto.GetClientOrder()
+	if err != nil {
+		return nil, err
+	}
+
+	if clientOrder.hasDigitalPlan {
 		template := TemplateData{
 			template: "signup_wh_plus",
 			subject:  "default",
 		}
-		return &template
+		return &template, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 type SignupDefaultTemplate struct{}
 
-func (SignupDefaultTemplate) accept(dto HydratorDTO) *TemplateData {
+func (SignupDefaultTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 	template := TemplateData{
 		template: "default",
 		subject:  "default",
 	}
 
-	return &template
+	return &template, nil
 }
 
 ///
@@ -70,66 +92,103 @@ func (SignupDefaultTemplate) accept(dto HydratorDTO) *TemplateData {
 
 type SubscribeWHPlusFMTemplate struct{}
 
-func (SubscribeWHPlusFMTemplate) accept(dto HydratorDTO) *TemplateData {
-	if dto.clientOrder.hasWHPlus && dto.bestPlan.discountedPrice == 0 && dto.clientOrder.hasFM {
+func (SubscribeWHPlusFMTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
+	clientOrder, err := dto.GetClientOrder()
+	if err != nil {
+		return nil, err
+	}
+
+	if !clientOrder.hasWHPlus && !clientOrder.hasFM {
+		return nil, nil
+	}
+
+	bestPlan, err := dto.GetBestPlan()
+	if err != nil {
+		return nil, err
+	}
+
+	if bestPlan.discountedPrice == 0 {
 		template := TemplateData{
 			template: "subscribe_wh_plus_fm",
 			subject:  "default",
 		}
-		return &template
+		return &template, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 type SubscribeWHPlusTemplate struct{}
 
-func (SubscribeWHPlusTemplate) accept(dto HydratorDTO) *TemplateData {
-	if dto.clientOrder.hasWHPlus && dto.bestPlan.discountedPrice == 0 {
+func (SubscribeWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
+	clientOrder, err := dto.GetClientOrder()
+	if err != nil {
+		return nil, err
+	}
+
+	if !clientOrder.hasWHPlus {
+		return nil, nil
+	}
+
+	bestPlan, err := dto.GetBestPlan()
+	if err != nil {
+		return nil, err
+	}
+
+	if bestPlan.discountedPrice == 0 {
 		template := TemplateData{
 			template: "subscribe_wh_plus",
 			subject:  "default",
 		}
-		return &template
+		return &template, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 type SubscribeFMTemplate struct{}
 
-func (SubscribeFMTemplate) accept(dto HydratorDTO) *TemplateData {
-	if dto.clientOrder.hasFM {
+func (SubscribeFMTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
+	clientOrder, err := dto.GetClientOrder()
+	if err != nil {
+		return nil, err
+	}
+
+	if clientOrder.hasFM {
 		template := TemplateData{
 			template: "subscribe_fm",
 			subject:  "default",
 		}
-		return &template
+		return &template, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 type SubscribeInternationalCheckingTemplate struct{}
 
-func (SubscribeInternationalCheckingTemplate) accept(dto HydratorDTO) *TemplateData {
-	if dto.clientOrder.hasInternationCheckin {
+func (SubscribeInternationalCheckingTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
+	clientOrder, err := dto.GetClientOrder()
+	if err != nil {
+		return nil, err
+	}
+	if clientOrder.hasInternationCheckin {
 		template := TemplateData{
 			template: "subscribe_international_checkin",
 			subject:  "default",
 		}
-		return &template
+		return &template, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 type SubscribeDefaultTemplate struct{}
 
-func (SubscribeDefaultTemplate) accept(dto HydratorDTO) *TemplateData {
+func (SubscribeDefaultTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 	template := TemplateData{
 		template: "subscribe_default",
 		subject:  "default",
 	}
-	return &template
+	return &template, nil
 }

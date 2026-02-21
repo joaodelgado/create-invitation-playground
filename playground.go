@@ -11,15 +11,6 @@ func (FeatureToggle) IsEnabled(feature, eligible string) bool {
 }
 
 func main() {
-	// TODO make explicit that the order of these chain items matter
-	hydratorChain := HydratorChain{
-		[]Hydrator{
-			ClientOrderHydrator{},
-			MembershipHydrator{},
-			PlanHydrator{},
-		},
-	}
-
 	signupTemplateChain := TemplateChain{
 		[]Template{
 			SignupWHPlusTemplate{},
@@ -33,7 +24,6 @@ func main() {
 			SubscribeWHPlusFMTemplate{},
 			SubscribeWHPlusTemplate{},
 			SubscribeFMTemplate{},
-			SubscribeInternationalCheckingTemplate{},
 			SubscribeDefaultTemplate{},
 		},
 	}
@@ -41,6 +31,7 @@ func main() {
 	abTestChain := ABTestChain{
 		[]ABTest{
 			SignupWHPlusSubject{},
+			SubscribeInternationalCheckIn{},
 		},
 	}
 
@@ -49,9 +40,7 @@ func main() {
 	batch := InvitationBatch{} // Dummy batch
 
 	for _, id := range batch.ids {
-		dto := HydratorDTO{eligibleID: id, isMember: false}
-
-		hydratorChain.hydrate(&dto)
+		dto := HydratorDTO{eligibleID: id, isMember: false, deps: HydratorDependencies{}}
 
 		var templateData TemplateData
 		if !dto.isMember {
@@ -60,7 +49,7 @@ func main() {
 			templateData, _ = subscribeTemplateChain.choose(dto)
 		}
 
-		templateData, experimentData := abTestChain.choose(featureToggle, dto, templateData)
+		templateData, experimentData, _ := abTestChain.choose(featureToggle, dto, templateData)
 
 		// Convert to KNS event
 		// Persist and publish events
