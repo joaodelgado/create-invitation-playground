@@ -1,10 +1,31 @@
 package main
 
+type LazyLoaded[T any] struct {
+	loaded bool
+	loader func() (T, error)
+	val    T
+}
+
+func (l *LazyLoaded[T]) Get() (T, error) {
+	if !l.loaded {
+		val, err := l.loader()
+		if err != nil {
+			var empty T
+			return empty, err
+		}
+		l.val = val
+		l.loaded = true
+	}
+
+	return l.val, nil
+}
+
 type InvitationBatch struct {
 	ids []string
 }
 
 type ClientOrder struct {
+	name                  string
 	country               string
 	locale                string
 	hasWHPlus             bool
@@ -15,6 +36,7 @@ type ClientOrder struct {
 
 type Membership struct {
 	locale string
+	name   string
 }
 
 type Plan struct {
@@ -24,22 +46,29 @@ type Plan struct {
 	discountPercentage float32
 }
 
+type Partner struct{}
+
 type HydratorDTO struct {
-	eligibleID  string
-	clientOrder *ClientOrder
-	membership  *Membership
-	bestPlan    *Plan
+	eligibleID          string
+	isMember            bool
+	clientOrder         *ClientOrder
+	membership          *Membership
+	BestPlan            LazyLoaded[Plan]
+	RecommendedPartners LazyLoaded[[]Partner]
 }
 
-type ExperimentData struct {
-	experimentEnabled bool
-	name              string
-	group             string
-	scenario          string
+type Experiment struct {
+	name    string
+	variant string
 }
 
-type TemplateData struct {
+type InvitationContext struct {
+	clientName      string
+	userName        string
+	recommendedPlan Plan
+}
+
+type Template struct {
 	template string
 	subject  string
-	// Other template data...
 }

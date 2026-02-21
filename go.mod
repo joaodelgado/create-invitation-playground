@@ -1,3 +1,3 @@
 module playground
 
-go 1.23.12
+go 1.26

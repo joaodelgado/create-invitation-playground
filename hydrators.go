@@ -23,34 +23,50 @@ type ClientOrderHydrator struct{}
 func (ClientOrderHydrator) hydrate(dto *HydratorDTO) {
 	// Would be an external call
 	dto.clientOrder = &ClientOrder{
-		country:        "BR",
-		locale:         "pt-BR",
-		hasWHPlus:      true,
-		hasFM:          true,
-		hasDigitalPlan: false,
+		country:               "BR",
+		locale:                "pt-BR",
+		hasWHPlus:             CONFIG.hasWHPlus,
+		hasFM:                 CONFIG.hasFM,
+		hasDigitalPlan:        CONFIG.hasDigitalPlan,
+		hasInternationCheckin: CONFIG.hasInternationCheckin,
 	}
 }
 
 type MembershipHydrator struct{}
 
 func (MembershipHydrator) hydrate(dto *HydratorDTO) {
+	if !dto.isMember {
+		return
+	}
+
 	// Would be an external call
 	dto.membership = &Membership{
 		locale: "pt-BR",
 	}
 }
 
-// Depends on ClientOrderHydrator
 type PlanHydrator struct{}
 
 func (PlanHydrator) hydrate(dto *HydratorDTO) {
-	if dto.clientOrder.hasWHPlus {
-		// Compute best plan
-		dto.bestPlan = &Plan{
-			planName:           "Silver",
-			originalPrice:      10,
-			discountedPrice:    8,
-			discountPercentage: 20,
-		}
+	dto.BestPlan = LazyLoaded[Plan]{
+		loader: func() (Plan, error) {
+			// Would be an external call
+			return Plan{
+				planName:           "Silver",
+				originalPrice:      10,
+				discountedPrice:    CONFIG.planDiscountedPrice,
+				discountPercentage: 100,
+			}, nil
+		},
+	}
+}
+
+type PartnerHydrator struct{}
+
+func (PartnerHydrator) hydrate(dto *HydratorDTO) {
+	dto.RecommendedPartners = LazyLoaded[[]Partner]{
+		loader: func() ([]Partner, error) {
+			return []Partner{}, nil
+		},
 	}
 }
