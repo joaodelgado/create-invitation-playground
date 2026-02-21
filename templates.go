@@ -3,135 +3,133 @@ package main
 import "errors"
 
 type Template interface {
-	accept(featureToggle FeatureToggle, dto HydratorDTO) (TemplateData, ExperimentData, bool)
+	accept(dto HydratorDTO) *TemplateData
 }
 
 type TemplateChain struct {
 	templates []Template
 }
 
-func (tc TemplateChain) choose(featureToggle FeatureToggle, dto HydratorDTO) (TemplateData, ExperimentData, error) {
+func (tc TemplateChain) choose(dto HydratorDTO) (TemplateData, error) {
 	for _, template := range tc.templates {
-		templateData, experimentData, accepted := template.accept(featureToggle, dto)
-		if accepted {
-			return templateData, experimentData, nil
+		templateData := template.accept(dto)
+		if templateData != nil {
+			return *templateData, nil
 		}
 	}
 
-	return TemplateData{}, ExperimentData{}, errors.New("No default template configured. Should never happen")
+	return TemplateData{}, errors.New("No default template configured. Should never happen")
 }
 
 ///
+/// Signup templates
 ///
-///
 
-type WHPlusFMTemplate struct{}
+type SignupWHPlusTemplate struct{}
 
-func (WHPlusFMTemplate) accept(featureToggle FeatureToggle, dto HydratorDTO) (TemplateData, ExperimentData, bool) {
-	if !(dto.clientOrder.hasWHPlus &&
-		dto.bestPlan.discountedPrice == 0 &&
-		dto.clientOrder.hasFM) {
-		return TemplateData{}, ExperimentData{}, false
-	}
-
-	return TemplateData{
-			template: "wellhub_plus_fm",
+func (SignupWHPlusTemplate) accept(dto HydratorDTO) *TemplateData {
+	if dto.clientOrder.hasWHPlus && dto.bestPlan.discountedPrice == 0 {
+		template := TemplateData{
+			template: "signup_wh_plus",
 			subject:  "default",
-		}, ExperimentData{
-			experimentEnabled: false,
-		},
-		true
-}
-
-type WHPlusTemplate struct{}
-
-func (WHPlusTemplate) accept(featureToggle FeatureToggle, dto HydratorDTO) (TemplateData, ExperimentData, bool) {
-	if !(dto.clientOrder.hasWHPlus && dto.bestPlan.discountedPrice == 0) {
-		return TemplateData{}, ExperimentData{}, false
-	}
-
-	return TemplateData{
-			template: "wellhub_plus_fm",
-			subject:  "default",
-		}, ExperimentData{
-			experimentEnabled: false,
-		},
-		true
-}
-
-type FMTemplate struct{}
-
-func (FMTemplate) accept(featureToggle FeatureToggle, dto HydratorDTO) (TemplateData, ExperimentData, bool) {
-	// Is acceptable?
-	if !dto.clientOrder.hasFM {
-		return TemplateData{}, ExperimentData{}, false
-	}
-
-	var subject string
-	var experimentData ExperimentData
-	if featureToggle.IsEnabled("fm_subject", dto.eligibleID) {
-		subject = "new_fm_subject"
-		experimentData = ExperimentData{
-			experimentEnabled: true,
-			name:              "fm_subject",
-			group:             "subject",
-			scenario:          "B",
 		}
-	} else {
-		subject = "default"
-		experimentData = ExperimentData{
-			experimentEnabled: true,
-			name:              "fm_subject",
-			group:             "subject",
-			scenario:          "A",
-		}
+		return &template
 	}
 
-	return TemplateData{
-			template: "fm",
-			subject:  subject,
-		}, experimentData,
-		true
+	return nil
 }
 
-type InternationalCheckin struct{}
+type SignupDigitalTemplate struct{}
 
-func (InternationalCheckin) accept(featureToggle FeatureToggle, dto HydratorDTO) (TemplateData, ExperimentData, bool) {
-	if !dto.clientOrder.hasInternationCheckin {
-		return TemplateData{}, ExperimentData{}, false
-	}
-
-	if featureToggle.IsEnabled("InternationalCheckin", dto.eligibleID) {
-		return TemplateData{
-				template: "new_default",
-				subject:  "new_default",
-			}, ExperimentData{
-				experimentEnabled: true,
-				name:              "new_default",
-				group:             "template",
-				scenario:          "B",
-			}, true
-	} else {
-		return TemplateData{
-				template: "default",
-				subject:  "default",
-			}, ExperimentData{
-				experimentEnabled: true,
-				name:              "new_default",
-				group:             "template",
-				scenario:          "A",
-			}, true
-	}
-
-}
-
-type Default struct{}
-
-func (Default) accept(featureToggle FeatureToggle, dto HydratorDTO) (TemplateData, ExperimentData, bool) {
-	return TemplateData{
-			template: "default",
+func (SignupDigitalTemplate) accept(dto HydratorDTO) *TemplateData {
+	if dto.clientOrder.hasDigitalPlan {
+		template := TemplateData{
+			template: "signup_wh_plus",
 			subject:  "default",
-		},
-		ExperimentData{experimentEnabled: false},
-		true
+		}
+		return &template
+	}
+
+	return nil
+}
+
+type SignupDefaultTemplate struct{}
+
+func (SignupDefaultTemplate) accept(dto HydratorDTO) *TemplateData {
+	template := TemplateData{
+		template: "default",
+		subject:  "default",
+	}
+
+	return &template
+}
+
+///
+/// Subscribe templates
+///
+
+type SubscribeWHPlusFMTemplate struct{}
+
+func (SubscribeWHPlusFMTemplate) accept(dto HydratorDTO) *TemplateData {
+	if dto.clientOrder.hasWHPlus && dto.bestPlan.discountedPrice == 0 && dto.clientOrder.hasFM {
+		template := TemplateData{
+			template: "subscribe_wh_plus_fm",
+			subject:  "default",
+		}
+		return &template
+	}
+
+	return nil
+}
+
+type SubscribeWHPlusTemplate struct{}
+
+func (SubscribeWHPlusTemplate) accept(dto HydratorDTO) *TemplateData {
+	if dto.clientOrder.hasWHPlus && dto.bestPlan.discountedPrice == 0 {
+		template := TemplateData{
+			template: "subscribe_wh_plus",
+			subject:  "default",
+		}
+		return &template
+	}
+
+	return nil
+}
+
+type SubscribeFMTemplate struct{}
+
+func (SubscribeFMTemplate) accept(dto HydratorDTO) *TemplateData {
+	if dto.clientOrder.hasFM {
+		template := TemplateData{
+			template: "subscribe_fm",
+			subject:  "default",
+		}
+		return &template
+	}
+
+	return nil
+}
+
+type SubscribeInternationalCheckingTemplate struct{}
+
+func (SubscribeInternationalCheckingTemplate) accept(dto HydratorDTO) *TemplateData {
+	if dto.clientOrder.hasInternationCheckin {
+		template := TemplateData{
+			template: "subscribe_international_checkin",
+			subject:  "default",
+		}
+		return &template
+	}
+
+	return nil
+}
+
+type SubscribeDefaultTemplate struct{}
+
+func (SubscribeDefaultTemplate) accept(dto HydratorDTO) *TemplateData {
+	template := TemplateData{
+		template: "subscribe_default",
+		subject:  "default",
+	}
+	return &template
 }

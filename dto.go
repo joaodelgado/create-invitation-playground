@@ -5,6 +5,7 @@ type InvitationBatch struct {
 }
 
 type ClientOrder struct {
+	name                  string
 	country               string
 	locale                string
 	hasWHPlus             bool
@@ -15,6 +16,7 @@ type ClientOrder struct {
 
 type Membership struct {
 	locale string
+	name   string
 }
 
 type Plan struct {
@@ -26,6 +28,7 @@ type Plan struct {
 
 type HydratorDTO struct {
 	eligibleID  string
+	isMember    bool
 	clientOrder *ClientOrder
 	membership  *Membership
 	bestPlan    *Plan
@@ -34,12 +37,16 @@ type HydratorDTO struct {
 type ExperimentData struct {
 	experimentEnabled bool
 	name              string
-	group             string
 	scenario          string
+}
+
+type InvitationContext struct {
+	clientName      string
+	userName        string
+	recommendedPlan Plan
 }
 
 type TemplateData struct {
 	template string
 	subject  string
-	// Other template data...
 }

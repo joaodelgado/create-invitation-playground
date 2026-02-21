@@ -34,6 +34,10 @@ func (ClientOrderHydrator) hydrate(dto *HydratorDTO) {
 type MembershipHydrator struct{}
 
 func (MembershipHydrator) hydrate(dto *HydratorDTO) {
+	if !dto.isMember {
+		return
+	}
+
 	// Would be an external call
 	dto.membership = &Membership{
 		locale: "pt-BR",
