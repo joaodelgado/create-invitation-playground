@@ -28,24 +28,6 @@ type Plan struct {
 
 type HydratorDependencies struct{}
 
-func (HydratorDependencies) LoadClientOrder() (ClientOrder, error) {
-	// Would be an external call
-	return ClientOrder{
-		country:        "BR",
-		locale:         "pt-BR",
-		hasWHPlus:      true,
-		hasFM:          true,
-		hasDigitalPlan: false,
-	}, nil
-}
-
-func (HydratorDependencies) LoadMembership() (Membership, error) {
-	// Would be an external call
-	return Membership{
-		locale: "pt-BR",
-	}, nil
-}
-
 func (HydratorDependencies) LoadBestPlan() (Plan, error) {
 	// Would be an external call
 	return Plan{
@@ -57,44 +39,13 @@ func (HydratorDependencies) LoadBestPlan() (Plan, error) {
 }
 
 type HydratorDTO struct {
-	eligibleID   string
-	isMember     bool
-	_clientOrder *ClientOrder
-	_membership  *Membership
-	_bestPlan    *Plan
+	eligibleID  string
+	isMember    bool
+	clientOrder *ClientOrder
+	membership  *Membership
+	_bestPlan   *Plan
 
 	deps HydratorDependencies
-}
-
-func (dto HydratorDTO) GetClientOrder() (ClientOrder, error) {
-	if dto._clientOrder == nil {
-		// External request
-		clientOrder, err := dto.deps.LoadClientOrder()
-		if err != nil {
-			return ClientOrder{}, err
-		}
-
-		dto._clientOrder = &clientOrder
-	}
-
-	return *dto._clientOrder, nil
-}
-
-func (dto HydratorDTO) GetMembership() (*Membership, error) {
-	if !dto.isMember {
-		return nil, nil
-	}
-	if dto._membership == nil {
-		// External request
-		membership, err := dto.deps.LoadMembership()
-		if err != nil {
-			return nil, err
-		}
-
-		dto._membership = &membership
-	}
-
-	return dto._membership, nil
 }
 
 func (dto HydratorDTO) GetBestPlan() (Plan, error) {

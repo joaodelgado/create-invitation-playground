@@ -58,11 +58,7 @@ func (SubscribeInternationalCheckIn) accept(featureToggle FeatureToggle, dto Hyd
 		return template, ExperimentData{}, false, nil
 	}
 
-	clientOrder, err := dto.GetClientOrder()
-	if err != nil {
-		return template, ExperimentData{}, false, err
-	}
-	if !clientOrder.hasInternationCheckin {
+	if !dto.clientOrder.hasInternationCheckin {
 		return template, ExperimentData{}, false, nil
 	}
 

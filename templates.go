@@ -32,11 +32,7 @@ func (tc TemplateChain) choose(dto HydratorDTO) (TemplateData, error) {
 type SignupWHPlusTemplate struct{}
 
 func (SignupWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	clientOrder, err := dto.GetClientOrder()
-	if err != nil {
-		return nil, err
-	}
-	if !clientOrder.hasWHPlus {
+	if !dto.clientOrder.hasWHPlus {
 		return nil, nil
 	}
 
@@ -59,12 +55,7 @@ func (SignupWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 type SignupDigitalTemplate struct{}
 
 func (SignupDigitalTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	clientOrder, err := dto.GetClientOrder()
-	if err != nil {
-		return nil, err
-	}
-
-	if clientOrder.hasDigitalPlan {
+	if dto.clientOrder.hasDigitalPlan {
 		template := TemplateData{
 			template: "signup_wh_plus",
 			subject:  "default",
@@ -93,12 +84,7 @@ func (SignupDefaultTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 type SubscribeWHPlusFMTemplate struct{}
 
 func (SubscribeWHPlusFMTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	clientOrder, err := dto.GetClientOrder()
-	if err != nil {
-		return nil, err
-	}
-
-	if !clientOrder.hasWHPlus && !clientOrder.hasFM {
+	if !dto.clientOrder.hasWHPlus && !dto.clientOrder.hasFM {
 		return nil, nil
 	}
 
@@ -121,12 +107,7 @@ func (SubscribeWHPlusFMTemplate) accept(dto HydratorDTO) (*TemplateData, error) 
 type SubscribeWHPlusTemplate struct{}
 
 func (SubscribeWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	clientOrder, err := dto.GetClientOrder()
-	if err != nil {
-		return nil, err
-	}
-
-	if !clientOrder.hasWHPlus {
+	if !dto.clientOrder.hasWHPlus {
 		return nil, nil
 	}
 
@@ -149,12 +130,7 @@ func (SubscribeWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 type SubscribeFMTemplate struct{}
 
 func (SubscribeFMTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	clientOrder, err := dto.GetClientOrder()
-	if err != nil {
-		return nil, err
-	}
-
-	if clientOrder.hasFM {
+	if dto.clientOrder.hasFM {
 		template := TemplateData{
 			template: "subscribe_fm",
 			subject:  "default",
@@ -168,11 +144,7 @@ func (SubscribeFMTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 type SubscribeInternationalCheckingTemplate struct{}
 
 func (SubscribeInternationalCheckingTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	clientOrder, err := dto.GetClientOrder()
-	if err != nil {
-		return nil, err
-	}
-	if clientOrder.hasInternationCheckin {
+	if dto.clientOrder.hasInternationCheckin {
 		template := TemplateData{
 			template: "subscribe_international_checkin",
 			subject:  "default",

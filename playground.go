@@ -11,6 +11,13 @@ func (FeatureToggle) IsEnabled(feature, eligible string) bool {
 }
 
 func main() {
+	hydratorChain := HydratorChain{
+		[]Hydrator{
+			ClientOrderHydrator{},
+			MembershipHydrator{},
+		},
+	}
+
 	signupTemplateChain := TemplateChain{
 		[]Template{
 			SignupWHPlusTemplate{},
@@ -41,6 +48,8 @@ func main() {
 
 	for _, id := range batch.ids {
 		dto := HydratorDTO{eligibleID: id, isMember: false, deps: HydratorDependencies{}}
+
+		hydratorChain.hydrate(&dto)
 
 		var templateData TemplateData
 		if !dto.isMember {
