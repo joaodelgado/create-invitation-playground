@@ -4,25 +4,29 @@ import "errors"
 
 type Template interface {
 	accept(dto HydratorDTO) (*TemplateData, error)
+	applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error)
 }
 
 type TemplateChain struct {
 	templates []Template
 }
 
-func (tc TemplateChain) choose(dto HydratorDTO) (TemplateData, error) {
+func (tc TemplateChain) choose(featureToggle FeatureToggle, dto HydratorDTO) (TemplateData, *ExperimentData, error) {
 	for _, template := range tc.templates {
-		templateData, error := template.accept(dto)
-		if error != nil {
-			return TemplateData{}, error
+		templateData, err := template.accept(dto)
+		if err != nil {
+			return TemplateData{}, nil, err
 		}
-
 		if templateData != nil {
-			return *templateData, nil
+			finalData, experiment, err := template.applyABTest(featureToggle, dto, *templateData)
+			if err != nil {
+				return TemplateData{}, nil, err
+			}
+			return finalData, experiment, nil
 		}
 	}
 
-	return TemplateData{}, errors.New("No default template configured. Should never happen")
+	return TemplateData{}, nil, errors.New("No default template configured. Should never happen.")
 }
 
 ///
@@ -53,6 +57,24 @@ func (SignupWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 
 }
 
+func (SignupWHPlusTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
+	enabled, variant := featureToggle.IsEnabled("SignupSubject", dto.eligibleID)
+	if !enabled {
+		return template, nil, nil
+	}
+	experiment := &ExperimentData{
+		experimentEnabled: true,
+		name:              "SignupSubject",
+		scenario:          variant,
+	}
+
+	if variant == "variant_a" {
+		template.subject = "signup_wh_plus_subject_variant_a"
+	}
+
+	return template, experiment, nil
+}
+
 type SignupDigitalTemplate struct{}
 
 func (SignupDigitalTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
@@ -67,6 +89,10 @@ func (SignupDigitalTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 	return nil, nil
 }
 
+func (SignupDigitalTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
+	return template, nil, nil
+}
+
 type SignupDefaultTemplate struct{}
 
 func (SignupDefaultTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
@@ -76,6 +102,10 @@ func (SignupDefaultTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 	}
 
 	return &template, nil
+}
+
+func (SignupDefaultTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
+	return template, nil, nil
 }
 
 ///
@@ -89,7 +119,7 @@ func (SubscribeWHPlusFMTemplate) accept(dto HydratorDTO) (*TemplateData, error) 
 		return nil, nil
 	}
 
-	bestPlan, err := dto.GetBestPlan()
+	bestPlan, err := dto.BestPlan.Get()
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +135,10 @@ func (SubscribeWHPlusFMTemplate) accept(dto HydratorDTO) (*TemplateData, error) 
 	return nil, nil
 }
 
+func (SubscribeWHPlusFMTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
+	return template, nil, nil
+}
+
 type SubscribeWHPlusTemplate struct{}
 
 func (SubscribeWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
@@ -112,7 +146,7 @@ func (SubscribeWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 		return nil, nil
 	}
 
-	bestPlan, err := dto.GetBestPlan()
+	bestPlan, err := dto.BestPlan.Get()
 	if err != nil {
 		return nil, err
 	}
@@ -126,6 +160,10 @@ func (SubscribeWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 	}
 
 	return nil, nil
+}
+
+func (SubscribeWHPlusTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
+	return template, nil, nil
 }
 
 type SubscribeFMTemplate struct{}
@@ -142,18 +180,8 @@ func (SubscribeFMTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 	return nil, nil
 }
 
-type SubscribeInternationalCheckingTemplate struct{}
-
-func (SubscribeInternationalCheckingTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	if dto.clientOrder.hasInternationCheckin {
-		template := TemplateData{
-			template: "subscribe_international_checkin",
-			subject:  "default",
-		}
-		return &template, nil
-	}
-
-	return nil, nil
+func (SubscribeFMTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
+	return template, nil, nil
 }
 
 type SubscribeDefaultTemplate struct{}
@@ -164,4 +192,8 @@ func (SubscribeDefaultTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 		subject:  "default",
 	}
 	return &template, nil
+}
+
+func (SubscribeDefaultTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
+	return template, nil, nil
 }

@@ -7,13 +7,14 @@ type LazyLoaded[T any] struct {
 }
 
 func (l *LazyLoaded[T]) Get() (T, error) {
-	var empty T
 	if !l.loaded {
 		val, err := l.loader()
 		if err != nil {
+			var empty T
 			return empty, err
 		}
 		l.val = val
+		l.loaded = true
 	}
 
 	return l.val, nil

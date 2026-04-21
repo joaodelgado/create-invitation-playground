@@ -6,8 +6,8 @@ import (
 
 type FeatureToggle struct{}
 
-func (FeatureToggle) IsEnabled(feature, eligible string) bool {
-	return true
+func (FeatureToggle) IsEnabled(feature, eligible string) (bool, string) {
+	return true, "variant_a"
 }
 
 func main() {
@@ -32,6 +32,7 @@ func main() {
 		[]Template{
 			SubscribeWHPlusFMTemplate{},
 			SubscribeWHPlusTemplate{},
+			// How to introduce an AB test here?
 			SubscribeFMTemplate{},
 			SubscribeDefaultTemplate{},
 		},
@@ -39,7 +40,6 @@ func main() {
 
 	abTestChain := ABTestChain{
 		[]ABTest{
-			SignupWHPlusSubject{},
 			SubscribeInternationalCheckIn{},
 		},
 	}
@@ -51,18 +51,22 @@ func main() {
 	batch := InvitationBatch{} // Dummy batch
 
 	for _, id := range batch.ids {
+		// Create invitation
 		dto := HydratorDTO{eligibleID: id, isMember: false}
 
 		hydratorChain.hydrate(&dto)
 
 		var templateData TemplateData
+		var experimentData *ExperimentData
 		if !dto.isMember {
-			templateData, _ = signupTemplateChain.choose(dto)
+			templateData, experimentData, _ = signupTemplateChain.choose(featureToggle, dto)
 		} else {
-			templateData, _ = subscribeTemplateChain.choose(dto)
+			templateData, experimentData, _ = subscribeTemplateChain.choose(featureToggle, dto)
 		}
 
-		templateData, experimentData, _ := abTestChain.choose(featureToggle, dto, templateData)
+		if experimentData == nil {
+			templateData, experimentData, _ = abTestChain.choose(featureToggle, dto, templateData)
+		}
 
 		// Convert to KNS event
 		// Persist and publish events
