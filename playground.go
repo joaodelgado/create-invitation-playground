@@ -15,6 +15,8 @@ func main() {
 		[]Hydrator{
 			ClientOrderHydrator{},
 			MembershipHydrator{},
+			PlanHydrator{},
+			PartnerHydrator{},
 		},
 	}
 
@@ -44,10 +46,12 @@ func main() {
 
 	featureToggle := FeatureToggle{}
 
+	//////////
+
 	batch := InvitationBatch{} // Dummy batch
 
 	for _, id := range batch.ids {
-		dto := HydratorDTO{eligibleID: id, isMember: false, deps: HydratorDependencies{}}
+		dto := HydratorDTO{eligibleID: id, isMember: false}
 
 		hydratorChain.hydrate(&dto)
 

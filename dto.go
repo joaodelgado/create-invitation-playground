@@ -1,5 +1,24 @@
 package main
 
+type LazyLoaded[T any] struct {
+	loaded bool
+	loader func() (T, error)
+	val    T
+}
+
+func (l *LazyLoaded[T]) Get() (T, error) {
+	var empty T
+	if !l.loaded {
+		val, err := l.loader()
+		if err != nil {
+			return empty, err
+		}
+		l.val = val
+	}
+
+	return l.val, nil
+}
+
 type InvitationBatch struct {
 	ids []string
 }
@@ -38,27 +57,15 @@ func (HydratorDependencies) LoadBestPlan() (Plan, error) {
 	}, nil
 }
 
+type Partner struct{}
+
 type HydratorDTO struct {
-	eligibleID  string
-	isMember    bool
-	clientOrder *ClientOrder
-	membership  *Membership
-	_bestPlan   *Plan
-
-	deps HydratorDependencies
-}
-
-func (dto HydratorDTO) GetBestPlan() (Plan, error) {
-	if dto._bestPlan == nil {
-		// External request
-		bestPlan, err := dto.deps.LoadBestPlan()
-		if err != nil {
-			return Plan{}, err
-		}
-
-		dto._bestPlan = &bestPlan
-	}
-	return *dto._bestPlan, nil
+	eligibleID          string
+	isMember            bool
+	clientOrder         *ClientOrder
+	membership          *Membership
+	BestPlan            LazyLoaded[Plan]
+	RecommendedPartners LazyLoaded[[]Partner]
 }
 
 type ExperimentData struct {

@@ -36,20 +36,21 @@ func (SignupWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
 		return nil, nil
 	}
 
-	bestPlan, err := dto.GetBestPlan()
+	bestPlan, err := dto.BestPlan.Get()
 	if err != nil {
 		return nil, err
 	}
 
-	if bestPlan.discountedPrice == 0 {
-		template := TemplateData{
-			template: "signup_wh_plus",
-			subject:  "default",
-		}
-		return &template, nil
+	if bestPlan.discountedPrice != 0 {
+		return nil, nil
 	}
 
-	return nil, nil
+	template := TemplateData{
+		template: "signup_wh_plus",
+		subject:  "default",
+	}
+	return &template, nil
+
 }
 
 type SignupDigitalTemplate struct{}

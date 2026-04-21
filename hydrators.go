@@ -39,3 +39,29 @@ func (MembershipHydrator) hydrate(dto *HydratorDTO) {
 		locale: "pt-BR",
 	}
 }
+
+type PlanHydrator struct{}
+
+func (PlanHydrator) hydrate(dto *HydratorDTO) {
+	dto.BestPlan = LazyLoaded[Plan]{
+		loader: func() (Plan, error) {
+			// Would be an external call
+			return Plan{
+				planName:           "Silver",
+				originalPrice:      10,
+				discountedPrice:    8,
+				discountPercentage: 20,
+			}, nil
+		},
+	}
+}
+
+type PartnerHydrator struct{}
+
+func (PartnerHydrator) hydrate(dto *HydratorDTO) {
+	dto.RecommendedPartners = LazyLoaded[[]Partner]{
+		loader: func() ([]Partner, error) {
+			return []Partner{}, nil
+		},
+	}
+}
