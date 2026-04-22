@@ -69,10 +69,9 @@ type HydratorDTO struct {
 	RecommendedPartners LazyLoaded[[]Partner]
 }
 
-type ExperimentData struct {
-	experimentEnabled bool
-	name              string
-	scenario          string
+type Experiment struct {
+	name    string
+	variant string
 }
 
 type InvitationContext struct {
@@ -81,7 +80,7 @@ type InvitationContext struct {
 	recommendedPlan Plan
 }
 
-type TemplateData struct {
+type Template struct {
 	template string
 	subject  string
 }

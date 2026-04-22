@@ -23,11 +23,12 @@ type ClientOrderHydrator struct{}
 func (ClientOrderHydrator) hydrate(dto *HydratorDTO) {
 	// Would be an external call
 	dto.clientOrder = &ClientOrder{
-		country:        "BR",
-		locale:         "pt-BR",
-		hasWHPlus:      true,
-		hasFM:          true,
-		hasDigitalPlan: false,
+		country:               "BR",
+		locale:                "pt-BR",
+		hasWHPlus:             false,
+		hasFM:                 true,
+		hasDigitalPlan:        false,
+		hasInternationCheckin: true,
 	}
 }
 
@@ -49,8 +50,8 @@ func (PlanHydrator) hydrate(dto *HydratorDTO) {
 			return Plan{
 				planName:           "Silver",
 				originalPrice:      10,
-				discountedPrice:    8,
-				discountPercentage: 20,
+				discountedPrice:    0,
+				discountPercentage: 100,
 			}, nil
 		},
 	}

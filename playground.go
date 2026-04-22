@@ -4,13 +4,56 @@ import (
 	"fmt"
 )
 
+// Helper structs to facilitate testing
+type ft struct {
+	enabled bool
+	variant string
+}
+
+type Config struct {
+	isMember bool
+
+	hasFM                 bool
+	hasDigitalPlan        bool
+	hasInternationCheckin bool
+
+	hasWHPlus           bool
+	planDiscountedPrice float32
+
+	abTests map[string]ft
+}
+
+var CONFIG Config = Config{
+	isMember: true,
+
+	hasFM:                 true,
+	hasDigitalPlan:        false,
+	hasInternationCheckin: true,
+	hasWHPlus:             true,
+
+	planDiscountedPrice: 10,
+
+	abTests: map[string]ft{
+		"SignupSubject":        {true, "variant_a"},
+		"InternationalCheckIn": {true, "variant_a"},
+		"SubscribeFMSubject":   {true, "control"},
+	},
+}
+
+//////
+
 type FeatureToggle struct{}
 
 func (FeatureToggle) IsEnabled(feature, eligible string) (bool, string) {
-	return true, "variant_a"
+	f := CONFIG.abTests[feature]
+	return f.enabled, f.variant
 }
 
 func main() {
+	//
+	// Application boot
+	//
+
 	hydratorChain := HydratorChain{
 		[]Hydrator{
 			ClientOrderHydrator{},
@@ -21,56 +64,51 @@ func main() {
 	}
 
 	signupTemplateChain := TemplateChain{
-		[]Template{
-			SignupWHPlusTemplate{},
-			SignupDigitalTemplate{},
-			SignupDefaultTemplate{},
+		[]TemplateDefinition{
+			CreateSignupWHPlusTemplateConfig(),
+			CreateSignupDigitalTemplateConfig(),
+			CreateSignupDefaultTemplateConfig(),
 		},
 	}
 
 	subscribeTemplateChain := TemplateChain{
-		[]Template{
-			SubscribeWHPlusFMTemplate{},
-			SubscribeWHPlusTemplate{},
-			// How to introduce an AB test here?
-			SubscribeFMTemplate{},
-			SubscribeDefaultTemplate{},
-		},
-	}
-
-	abTestChain := ABTestChain{
-		[]ABTest{
-			SubscribeInternationalCheckIn{},
+		[]TemplateDefinition{
+			CreateSubscribeWHPlusFMTemplateConfig(),
+			CreateSubscribeWHPlusTemplateConfig(),
+			CreateSubscribeInternationalCheckinTemplateConfig(),
+			CreateSubscribeFMTemplateConfig(),
+			CreateSubscribeDefaultTemplateConfig(),
 		},
 	}
 
 	featureToggle := FeatureToggle{}
 
-	//////////
+	//
+	// CreateInvitation
+	//
 
-	batch := InvitationBatch{} // Dummy batch
+	dto := HydratorDTO{eligibleID: "7343a8ea-9f4b-4ebc-aca2-5e1901869e3b", isMember: CONFIG.isMember}
 
-	for _, id := range batch.ids {
-		// Create invitation
-		dto := HydratorDTO{eligibleID: id, isMember: false}
+	hydratorChain.hydrate(&dto)
 
-		hydratorChain.hydrate(&dto)
+	var template Template
+	var experiment *Experiment
+	if !dto.isMember {
+		template, experiment, _ = signupTemplateChain.choose(featureToggle, dto)
+	} else {
+		template, experiment, _ = subscribeTemplateChain.choose(featureToggle, dto)
+	}
 
-		var templateData TemplateData
-		var experimentData *ExperimentData
-		if !dto.isMember {
-			templateData, experimentData, _ = signupTemplateChain.choose(featureToggle, dto)
-		} else {
-			templateData, experimentData, _ = subscribeTemplateChain.choose(featureToggle, dto)
-		}
+	// Persistence phase
+	// Convert to KNS event
+	// Persist and publish events
+	fmt.Printf("Template:   %v\n", template.template)
+	fmt.Printf("Subject:    %v\n", template.subject)
+	if experiment != nil {
+		fmt.Printf("Experiment: %v - %v\n", experiment.name, experiment.variant)
+	} else {
 
-		if experimentData == nil {
-			templateData, experimentData, _ = abTestChain.choose(featureToggle, dto, templateData)
-		}
-
-		// Convert to KNS event
-		// Persist and publish events
-		fmt.Printf("%v %v", templateData, experimentData)
+		fmt.Println("Experiment: N/A")
 	}
 
 }

@@ -2,198 +2,325 @@ package main
 
 import "errors"
 
-type Template interface {
-	accept(dto HydratorDTO) (*TemplateData, error)
-	applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error)
+//
+// Template definition
+//
+
+type Precondition func(HydratorDTO) (bool, error)
+type BuildTemplate func(HydratorDTO) (Template, error)
+type ABTestChecker func(FeatureToggle, HydratorDTO) (enabled bool, variant string)
+type ABTestPropertyBuilder func(variant string, dto HydratorDTO, template Template) (Template, Experiment, error)
+type ABTestTemplateBuilder func(variant string, dto HydratorDTO) (*Template, Experiment, error)
+
+type TemplateDefinition struct {
+	// Determines if the template definition is applicable at all
+	precondition Precondition
+
+	// Builds the base template if there is no template level AB test running
+	templateBuilder *BuildTemplate
+
+	// Modifies the base template with a property level AB test, if any
+	propertyABTestEnabled ABTestChecker
+	propertyABTest        *ABTestPropertyBuilder
+
+	// Builds the template when there is an template level AB test running
+	templateABTestEnabled ABTestChecker
+	buildTemplateABTest   *ABTestTemplateBuilder
+}
+
+// Just an idea of how to creating a TemplateDefinition could be done.
+// Not to be taken too seriously
+type TemplateDefinitionBuilder struct {
+	_inner *TemplateDefinition
+}
+
+func NewTemplateDefinition(precondition func(HydratorDTO) (bool, error)) TemplateDefinitionBuilder {
+	disabled := func(FeatureToggle, HydratorDTO) (bool, string) { return false, "" }
+	return TemplateDefinitionBuilder{
+		_inner: &TemplateDefinition{
+			precondition:          precondition,
+			propertyABTestEnabled: disabled,
+			templateABTestEnabled: disabled,
+		},
+	}
+}
+
+func (builder TemplateDefinitionBuilder) WithBuildTemplate(buildTemplate BuildTemplate) TemplateDefinitionBuilder {
+	builder._inner.templateBuilder = &buildTemplate
+	return builder
+}
+
+func (builder TemplateDefinitionBuilder) WithPropertyABTest(
+	enabled ABTestChecker,
+	propertyABTest ABTestPropertyBuilder,
+) TemplateDefinitionBuilder {
+	builder._inner.propertyABTestEnabled = enabled
+	builder._inner.propertyABTest = &propertyABTest
+	return builder
+}
+
+func (builder TemplateDefinitionBuilder) WithTemplateABTest(
+	enabled ABTestChecker,
+	buildTemplateABTest ABTestTemplateBuilder,
+) TemplateDefinitionBuilder {
+	builder._inner.templateABTestEnabled = enabled
+	builder._inner.buildTemplateABTest = &buildTemplateABTest
+	return builder
+}
+
+func (builder TemplateDefinitionBuilder) Build() TemplateDefinition {
+	return *builder._inner
 }
 
 type TemplateChain struct {
-	templates []Template
+	templates []TemplateDefinition
 }
 
-func (tc TemplateChain) choose(featureToggle FeatureToggle, dto HydratorDTO) (TemplateData, *ExperimentData, error) {
-	for _, template := range tc.templates {
-		templateData, err := template.accept(dto)
+func (tc TemplateChain) choose(featureToggle FeatureToggle, dto HydratorDTO) (Template, *Experiment, error) {
+	var currentExperiment *Experiment
+
+	for _, templateDefinition := range tc.templates {
+		accepted, err := templateDefinition.precondition(dto)
 		if err != nil {
-			return TemplateData{}, nil, err
+			return Template{}, nil, err
 		}
-		if templateData != nil {
-			finalData, experiment, err := template.applyABTest(featureToggle, dto, *templateData)
+		if !accepted {
+			continue
+		}
+
+		if templateDefinition.templateBuilder != nil {
+			template, err := (*templateDefinition.templateBuilder)(dto)
 			if err != nil {
-				return TemplateData{}, nil, err
+				return Template{}, nil, err
 			}
-			return finalData, experiment, nil
+
+			if currentExperiment == nil {
+				enabled, variant := templateDefinition.propertyABTestEnabled(featureToggle, dto)
+				if enabled {
+					template, experiment, err := (*templateDefinition.propertyABTest)(variant, dto, template)
+					if err != nil {
+						return Template{}, nil, err
+					}
+					return template, &experiment, nil
+				}
+			}
+			return template, currentExperiment, nil
+		}
+
+		if currentExperiment == nil {
+			enabled, variant := templateDefinition.templateABTestEnabled(featureToggle, dto)
+			if enabled {
+				maybeTemplate, experimentData, err := (*templateDefinition.buildTemplateABTest)(variant, dto)
+				if err != nil {
+					return Template{}, nil, err
+				}
+
+				currentExperiment = &experimentData
+				if maybeTemplate != nil {
+					return *maybeTemplate, currentExperimentData, nil
+				}
+			}
 		}
 	}
 
-	return TemplateData{}, nil, errors.New("No default template configured. Should never happen.")
+	return Template{}, nil, errors.New("No default template configured. Should never happen.")
 }
 
 ///
 /// Signup templates
 ///
 
-type SignupWHPlusTemplate struct{}
+func CreateSignupWHPlusTemplateDefinition() TemplateDefinition {
+	return NewTemplateDefinition(
+		func(dto HydratorDTO) (bool, error) {
+			if !dto.clientOrder.hasWHPlus {
+				return false, nil
+			}
 
-func (SignupWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	if !dto.clientOrder.hasWHPlus {
-		return nil, nil
-	}
+			bestPlan, err := dto.BestPlan.Get()
+			if err != nil {
+				return false, err
+			}
 
-	bestPlan, err := dto.BestPlan.Get()
-	if err != nil {
-		return nil, err
-	}
+			return bestPlan.discountedPrice == 0, nil
+		},
+	).WithBuildTemplate(
+		func(HydratorDTO) (Template, error) {
+			return Template{
+				template: "signup_wh_plus",
+				subject:  "default",
+			}, nil
+		},
+	).WithPropertyABTest(
+		func(featureToggle FeatureToggle, dto HydratorDTO) (bool, string) {
+			return featureToggle.IsEnabled("SignupSubject", dto.eligibleID)
+		},
+		func(variant string, dto HydratorDTO, template Template) (Template, Experiment, error) {
+			experiment := Experiment{
+				name:    "SignupWHPlusSubject",
+				variant: variant,
+			}
 
-	if bestPlan.discountedPrice != 0 {
-		return nil, nil
-	}
+			if variant == "variant_a" {
+				template.subject = "signup_wh_plus_subject_variant_a"
+			}
 
-	template := TemplateData{
-		template: "signup_wh_plus",
-		subject:  "default",
-	}
-	return &template, nil
-
+			return template, experiment, nil
+		},
+	).Build()
 }
 
-func (SignupWHPlusTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
-	enabled, variant := featureToggle.IsEnabled("SignupSubject", dto.eligibleID)
-	if !enabled {
-		return template, nil, nil
-	}
-	experiment := &ExperimentData{
-		experimentEnabled: true,
-		name:              "SignupSubject",
-		scenario:          variant,
-	}
-
-	if variant == "variant_a" {
-		template.subject = "signup_wh_plus_subject_variant_a"
-	}
-
-	return template, experiment, nil
+func CreateSignupDigitalTemplateDefinition() TemplateDefinition {
+	return NewTemplateDefinition(
+		func(dto HydratorDTO) (bool, error) {
+			return dto.clientOrder.hasDigitalPlan, nil
+		},
+	).WithBuildTemplate(
+		func(HydratorDTO) (Template, error) {
+			return Template{
+				template: "signup_digital_plan",
+				subject:  "default",
+			}, nil
+		},
+	).Build()
 }
 
-type SignupDigitalTemplate struct{}
-
-func (SignupDigitalTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	if dto.clientOrder.hasDigitalPlan {
-		template := TemplateData{
-			template: "signup_wh_plus",
-			subject:  "default",
-		}
-		return &template, nil
-	}
-
-	return nil, nil
-}
-
-func (SignupDigitalTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
-	return template, nil, nil
-}
-
-type SignupDefaultTemplate struct{}
-
-func (SignupDefaultTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	template := TemplateData{
-		template: "default",
-		subject:  "default",
-	}
-
-	return &template, nil
-}
-
-func (SignupDefaultTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
-	return template, nil, nil
+func CreateSignupDefaultTemplateDefinition() TemplateDefinition {
+	return NewTemplateDefinition(
+		func(dto HydratorDTO) (bool, error) {
+			return true, nil
+		},
+	).WithBuildTemplate(
+		func(HydratorDTO) (Template, error) {
+			return Template{
+				template: "signup_default",
+				subject:  "default",
+			}, nil
+		},
+	).Build()
 }
 
 ///
 /// Subscribe templates
 ///
 
-type SubscribeWHPlusFMTemplate struct{}
+func CreateSubscribeWHPlusFMTemplateDefinition() TemplateDefinition {
+	return NewTemplateDefinition(
+		func(dto HydratorDTO) (bool, error) {
+			if !dto.clientOrder.hasWHPlus || !dto.clientOrder.hasFM {
+				return false, nil
+			}
 
-func (SubscribeWHPlusFMTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	if !dto.clientOrder.hasWHPlus && !dto.clientOrder.hasFM {
-		return nil, nil
-	}
+			bestPlan, err := dto.BestPlan.Get()
+			if err != nil {
+				return false, err
+			}
 
-	bestPlan, err := dto.BestPlan.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	if bestPlan.discountedPrice == 0 {
-		template := TemplateData{
-			template: "subscribe_wh_plus_fm",
-			subject:  "default",
-		}
-		return &template, nil
-	}
-
-	return nil, nil
+			return bestPlan.discountedPrice == 0, nil
+		},
+	).WithBuildTemplate(
+		func(HydratorDTO) (Template, error) {
+			return Template{
+				template: "subscribe_wh_plus_fm",
+				subject:  "default",
+			}, nil
+		},
+	).Build()
 }
 
-func (SubscribeWHPlusFMTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
-	return template, nil, nil
+func CreateSubscribeWHPlusTemplateDefinition() TemplateDefinition {
+	return NewTemplateDefinition(
+		func(dto HydratorDTO) (bool, error) {
+			if !dto.clientOrder.hasWHPlus {
+				return false, nil
+			}
+
+			bestPlan, err := dto.BestPlan.Get()
+			if err != nil {
+				return false, err
+			}
+
+			return bestPlan.discountedPrice == 0, nil
+		},
+	).WithBuildTemplate(
+		func(HydratorDTO) (Template, error) {
+			return Template{
+				template: "subscribe_wh_plus",
+				subject:  "default",
+			}, nil
+		},
+	).Build()
 }
 
-type SubscribeWHPlusTemplate struct{}
+func CreateSubscribeInternationalCheckinTemplateDefinition() TemplateDefinition {
+	return NewTemplateDefinition(
+		func(dto HydratorDTO) (bool, error) {
+			return dto.clientOrder.hasInternationCheckin, nil
+		},
+	).WithTemplateABTest(
+		func(featureToggle FeatureToggle, dto HydratorDTO) (enabled bool, variant string) {
+			return featureToggle.IsEnabled("InternationalCheckIn", dto.eligibleID)
+		},
+		func(variant string, dto HydratorDTO) (*Template, Experiment, error) {
+			experiment := Experiment{
+				name:    "InternationalCheckIn",
+				variant: variant,
+			}
 
-func (SubscribeWHPlusTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	if !dto.clientOrder.hasWHPlus {
-		return nil, nil
-	}
-
-	bestPlan, err := dto.BestPlan.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	if bestPlan.discountedPrice == 0 {
-		template := TemplateData{
-			template: "subscribe_wh_plus",
-			subject:  "default",
-		}
-		return &template, nil
-	}
-
-	return nil, nil
+			if variant == "control" {
+				return nil, experiment, nil
+			} else {
+				return &Template{
+					template: "subscribe_international_checkin",
+					subject:  "default",
+				}, experiment, nil
+			}
+		},
+	).Build()
 }
 
-func (SubscribeWHPlusTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
-	return template, nil, nil
+func CreateSubscribeFMTemplateDefinition() TemplateDefinition {
+	return NewTemplateDefinition(
+		func(dto HydratorDTO) (bool, error) {
+			return dto.clientOrder.hasFM, nil
+		},
+	).WithBuildTemplate(
+		func(HydratorDTO) (Template, error) {
+			return Template{
+				template: "subscribe_fm",
+				subject:  "default",
+			}, nil
+		},
+	).WithPropertyABTest(
+		func(featureToggle FeatureToggle, dto HydratorDTO) (bool, string) {
+			return featureToggle.IsEnabled("SubscribeFMSubject", dto.eligibleID)
+		},
+		func(variant string, dto HydratorDTO, template Template) (Template, Experiment, error) {
+			experiment := Experiment{
+				name:    "SubscribeFMSubject",
+				variant: variant,
+			}
+
+			if variant == "variant_a" {
+				template.subject = "subscribe_fm_subject_variant_a"
+			}
+
+			return template, experiment, nil
+		},
+	).Build()
 }
 
-type SubscribeFMTemplate struct{}
-
-func (SubscribeFMTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	if dto.clientOrder.hasFM {
-		template := TemplateData{
-			template: "subscribe_fm",
-			subject:  "default",
-		}
-		return &template, nil
-	}
-
-	return nil, nil
-}
-
-func (SubscribeFMTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
-	return template, nil, nil
-}
-
-type SubscribeDefaultTemplate struct{}
-
-func (SubscribeDefaultTemplate) accept(dto HydratorDTO) (*TemplateData, error) {
-	template := TemplateData{
-		template: "subscribe_default",
-		subject:  "default",
-	}
-	return &template, nil
-}
-
-func (SubscribeDefaultTemplate) applyABTest(featureToggle FeatureToggle, dto HydratorDTO, template TemplateData) (TemplateData, *ExperimentData, error) {
-	return template, nil, nil
+func CreateSubscribeDefaultTemplateConfig() TemplateDefinition {
+	return NewTemplateDefinition(
+		func(dto HydratorDTO) (bool, error) {
+			return true, nil
+		},
+	).WithBuildTemplate(
+		func(HydratorDTO) (Template, error) {
+			return Template{
+				template: "subscribe_default",
+				subject:  "default",
+			}, nil
+		},
+	).Build()
 }
