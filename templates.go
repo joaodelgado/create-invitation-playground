@@ -117,7 +117,7 @@ func (tc TemplateChain) choose(featureToggle FeatureToggle, dto HydratorDTO) (Te
 
 				currentExperiment = &experimentData
 				if maybeTemplate != nil {
-					return *maybeTemplate, currentExperimentData, nil
+					return *maybeTemplate, currentExperiment, nil
 				}
 			}
 		}

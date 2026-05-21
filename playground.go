@@ -29,14 +29,14 @@ var CONFIG Config = Config{
 	hasFM:                 true,
 	hasDigitalPlan:        false,
 	hasInternationCheckin: true,
-	hasWHPlus:             true,
+	hasWHPlus:             false,
 
 	planDiscountedPrice: 10,
 
 	abTests: map[string]ft{
 		"SignupSubject":        {true, "variant_a"},
-		"InternationalCheckIn": {true, "variant_a"},
-		"SubscribeFMSubject":   {true, "control"},
+		"InternationalCheckIn": {true, "control"},
+		"SubscribeFMSubject":   {true, "variant_a"},
 	},
 }
 
@@ -65,18 +65,18 @@ func main() {
 
 	signupTemplateChain := TemplateChain{
 		[]TemplateDefinition{
-			CreateSignupWHPlusTemplateConfig(),
-			CreateSignupDigitalTemplateConfig(),
-			CreateSignupDefaultTemplateConfig(),
+			CreateSignupWHPlusTemplateDefinition(),
+			CreateSignupDigitalTemplateDefinition(),
+			CreateSignupDefaultTemplateDefinition(),
 		},
 	}
 
 	subscribeTemplateChain := TemplateChain{
 		[]TemplateDefinition{
-			CreateSubscribeWHPlusFMTemplateConfig(),
-			CreateSubscribeWHPlusTemplateConfig(),
-			CreateSubscribeInternationalCheckinTemplateConfig(),
-			CreateSubscribeFMTemplateConfig(),
+			CreateSubscribeWHPlusFMTemplateDefinition(),
+			CreateSubscribeWHPlusTemplateDefinition(),
+			CreateSubscribeInternationalCheckinTemplateDefinition(),
+			CreateSubscribeFMTemplateDefinition(),
 			CreateSubscribeDefaultTemplateConfig(),
 		},
 	}

@@ -25,10 +25,10 @@ func (ClientOrderHydrator) hydrate(dto *HydratorDTO) {
 	dto.clientOrder = &ClientOrder{
 		country:               "BR",
 		locale:                "pt-BR",
-		hasWHPlus:             false,
-		hasFM:                 true,
-		hasDigitalPlan:        false,
-		hasInternationCheckin: true,
+		hasWHPlus:             CONFIG.hasWHPlus,
+		hasFM:                 CONFIG.hasFM,
+		hasDigitalPlan:        CONFIG.hasDigitalPlan,
+		hasInternationCheckin: CONFIG.hasInternationCheckin,
 	}
 }
 
